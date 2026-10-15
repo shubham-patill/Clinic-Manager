@@ -1,0 +1,83 @@
+{
+  "name": "dentcare-pro",
+  "version": "1.0.0",
+  "description": "DentCare Pro - Standalone Dental Clinic Management System with Self-Contained Database",
+  "main": "electron/main.js",
+  "author": "DentCare Systems",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "start": "electron .",
+    "electron:dev": "concurrently -k \"vite\" \"wait-on tcp:5173 && electron . --dev\"",
+    "build:exe": "vite build && electron-builder --win nsis --x64",
+    "build:portable": "vite build && electron-builder --win portable --x64",
+    "dist": "vite build && electron-builder --win --x64"
+  },
+  "build": {
+    "appId": "com.dentcare.clinicmanage",
+    "productName": "DentCare Pro",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "DentCare Pro"
+    },
+    "portable": {
+      "artifactName": "DentCare-Pro-Portable.exe"
+    }
+  },
+  "keywords": [
+    "dental",
+    "clinic-management",
+    "ehr",
+    "odontogram",
+    "sqlite",
+    "desktop",
+    "windows-exe"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "@vitejs/plugin-react": "^6.1.2",
+    "concurrently": "^10.0.6",
+    "electron": "^44.7.0",
+    "electron-builder": "^26.15.3",
+    "lucide-react": "^1.55.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "vite": "^8.3.4",
+    "wait-on": "^9.5.1"
+  },
+  "dependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "clsx": "^2.1.1",
+    "sql.js": "^1.14.2",
+    "tailwindcss": "^4.3.3"
+  }
+}
