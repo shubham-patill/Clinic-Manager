@@ -1,4 +1,19 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const electron = require('electron');
+
+// Safe fallback: If invoked with plain 'node' on a web host (e.g. Render) without Electron runtime,
+// delegate gracefully to the web server instead of crashing.
+if (!electron || typeof electron !== 'object' || !electron.app) {
+  console.log('[DentCare Pro] Plain Node environment detected. Starting web server mode...');
+  try {
+    require('../server.js');
+  } catch (err) {
+    console.error('Failed to start web server:', err);
+    process.exit(1);
+  }
+  return;
+}
+
+const { app, BrowserWindow, ipcMain, dialog } = electron;
 const path = require('node:path');
 const fs = require('node:fs');
 const dbLayer = require('./db');
