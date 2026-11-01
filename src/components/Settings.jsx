@@ -15,14 +15,21 @@ import {
   Trash2,
   Edit,
   UserCheck,
-  Stethoscope
+  Stethoscope,
+  FileSpreadsheet,
+  FileCode,
+  Terminal,
+  Copy,
+  Check
 } from 'lucide-react';
 import { 
   getClinicSettings, 
   updateClinicSettings, 
   getDatabaseInfo, 
   backupDatabase, 
-  restoreDatabase 
+  restoreDatabase,
+  exportDatabaseToSQL,
+  exportDatabaseToExcel
 } from '../services/api';
 
 export default function Settings({ 
@@ -122,6 +129,48 @@ export default function Settings({
     }
   };
 
+  // State for SQL & Excel exports
+  const [sqlSuccess, setSqlSuccess] = useState(null);
+  const [excelSuccess, setExcelSuccess] = useState(null);
+  const [copiedCommand, setCopiedCommand] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleExportSQL = async () => {
+    setIsExporting(true);
+    try {
+      const res = await exportDatabaseToSQL();
+      if (res && res.success) {
+        setSqlSuccess(res.path || 'SQL dump script generated successfully!');
+        setTimeout(() => setSqlSuccess(null), 6000);
+      }
+    } catch (err) {
+      alert('SQL Export failed: ' + err.message);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleExportExcel = async () => {
+    setIsExporting(true);
+    try {
+      const res = await exportDatabaseToExcel();
+      if (res && res.success) {
+        setExcelSuccess(res.path || 'Excel workbook exported successfully!');
+        setTimeout(() => setExcelSuccess(null), 6000);
+      }
+    } catch (err) {
+      alert('Excel Export failed: ' + err.message);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleCopyCommand = (cmd) => {
+    navigator.clipboard.writeText(cmd);
+    setCopiedCommand(true);
+    setTimeout(() => setCopiedCommand(false), 2500);
+  };
+
   const openAddDoctor = () => {
     setEditingDoctor(null);
     setDoctorForm({
@@ -195,36 +244,111 @@ export default function Settings({
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={handleExportExcel}
+              disabled={isExporting}
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-700/30 transition disabled:opacity-50"
+              title="Export all Patients, Appointments, Billing, and Treatments to an Excel spreadsheet"
+            >
+              <FileSpreadsheet className="w-4 h-4" /> Export to Excel (.xls)
+            </button>
+            <button
+              onClick={handleExportSQL}
+              disabled={isExporting}
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-700/30 transition disabled:opacity-50"
+              title="Export full ANSI SQL script with CREATE TABLE & INSERT statements for 1-command loading"
+            >
+              <FileCode className="w-4 h-4" /> Export SQL Dump (.sql)
+            </button>
             <button
               onClick={handleBackup}
-              className="flex items-center gap-1.5 px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-xs font-bold shadow-md shadow-teal-700/30 transition"
+              disabled={isExporting}
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-xs font-bold shadow-md shadow-teal-700/30 transition disabled:opacity-50"
+              title="Export raw SQLite database file"
             >
-              <HardDriveDownload className="w-4 h-4" /> Export Backup (.db)
+              <HardDriveDownload className="w-4 h-4" /> Backup (.db)
             </button>
             <button
               onClick={handleRestore}
-              className="flex items-center gap-1.5 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-bold border border-slate-600 transition"
+              disabled={isExporting}
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-bold border border-slate-600 transition disabled:opacity-50"
+              title="Restore database from a .db backup"
             >
               <HardDriveUpload className="w-4 h-4" /> Restore (.db)
             </button>
           </div>
         </div>
 
-        {/* Success feedback pills */}
-        {backupSuccess && (
+        {/* Feedback pills */}
+        {excelSuccess && (
           <div className="p-3 bg-emerald-900/60 border border-emerald-500 text-emerald-200 text-xs rounded-xl flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-            <span>Backup created successfully: {backupSuccess}</span>
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span>Excel exported successfully! Open in Microsoft Excel: <strong>{excelSuccess}</strong></span>
+          </div>
+        )}
+
+        {sqlSuccess && (
+          <div className="p-3 bg-indigo-900/60 border border-indigo-500 text-indigo-200 text-xs rounded-xl flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-indigo-400 shrink-0" />
+            <span>SQL dump exported successfully! File: <strong>{sqlSuccess}</strong></span>
+          </div>
+        )}
+
+        {backupSuccess && (
+          <div className="p-3 bg-teal-900/60 border border-teal-500 text-teal-200 text-xs rounded-xl flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-teal-400 shrink-0" />
+            <span>Database backup (.db) created: {backupSuccess}</span>
           </div>
         )}
 
         {restoreSuccess && (
           <div className="p-3 bg-teal-900/60 border border-teal-500 text-teal-200 text-xs rounded-xl flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-teal-400" />
+            <CheckCircle2 className="w-4 h-4 text-teal-400 shrink-0" />
             <span>{restoreSuccess}</span>
           </div>
         )}
+
+        {/* 1-Command SQL Load Guide Box */}
+        <div className="bg-slate-950/80 rounded-2xl p-4 border border-slate-700/80 space-y-2.5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-xs font-semibold text-slate-200">
+              <Terminal className="w-4 h-4 text-indigo-400" />
+              <span>One-Command SQL Database Import Guide</span>
+            </div>
+            <span className="text-[10px] text-slate-400 bg-slate-800 px-2 py-0.5 rounded-md font-mono">
+              ANSI SQL Compatible
+            </span>
+          </div>
+          <p className="text-[11px] text-slate-400 leading-relaxed">
+            The exported <strong>.sql</strong> file contains all <code className="text-teal-300">CREATE TABLE</code> schemas and <code className="text-teal-300">INSERT INTO</code> records. You can load it into any local SQL server (MySQL, MariaDB, SQLite, or PostgreSQL) with just <strong>one command</strong>:
+          </p>
+
+          <div className="space-y-1.5 font-mono text-[11px]">
+            <div className="flex items-center justify-between bg-slate-900 px-3 py-2 rounded-lg border border-slate-800 text-slate-300">
+              <span><span className="text-indigo-400 font-bold">MySQL / MariaDB:</span> mysql -u root -p clinic_db &lt; DentCare_Clinic_Dump.sql</span>
+              <button
+                type="button"
+                onClick={() => handleCopyCommand('mysql -u root -p clinic_db < DentCare_Clinic_Dump.sql')}
+                className="text-xs text-slate-400 hover:text-white flex items-center gap-1 transition ml-2"
+                title="Copy command"
+              >
+                {copiedCommand ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+              </button>
+            </div>
+            <div className="flex items-center justify-between bg-slate-900 px-3 py-2 rounded-lg border border-slate-800 text-slate-300">
+              <span><span className="text-teal-400 font-bold">SQLite 3:</span> sqlite3 clinic_local.db &lt; DentCare_Clinic_Dump.sql</span>
+              <button
+                type="button"
+                onClick={() => handleCopyCommand('sqlite3 clinic_local.db < DentCare_Clinic_Dump.sql')}
+                className="text-xs text-slate-400 hover:text-white flex items-center gap-1 transition ml-2"
+                title="Copy command"
+              >
+                {copiedCommand ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+              </button>
+            </div>
+          </div>
+        </div>
 
         {/* DB Details grid */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-3 border-t border-slate-700/60 text-xs">

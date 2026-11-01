@@ -1187,6 +1187,493 @@ export async function restoreDatabase() {
   return { success: false };
 }
 
+// Helper to download or save export files in Electron or Browser
+async function saveExportFile(defaultFilename, content, filters, mimeType) {
+  if (isElectron && window.electronAPI?.saveFile) {
+    return await window.electronAPI.saveFile({ defaultFilename, content, filters });
+  }
+  // Browser fallback download
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = defaultFilename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  return { success: true, path: defaultFilename };
+}
+
+// ==========================================
+// SQL SCRIPT EXPORT (.sql)
+// Allows loading whole clinic database in 1 command
+// ==========================================
+export async function exportDatabaseToSQL() {
+  const dateStr = new Date().toISOString().split('T')[0];
+  const filename = `DentCare_Clinic_Dump_${dateStr}.sql`;
+
+  let data = {};
+  if (isElectron) {
+    const tableNames = [
+      'clinic_settings', 'doctors', 'patients', 'odontogram',
+      'procedures_catalog', 'treatments', 'appointments',
+      'invoices', 'invoice_items', 'payments', 'prescriptions', 'medications_master'
+    ];
+    for (const tbl of tableNames) {
+      try {
+        data[tbl] = await window.electronAPI.queryAll(`SELECT * FROM ${tbl}`);
+      } catch (e) {
+        data[tbl] = [];
+      }
+    }
+  } else {
+    data = webFallback.getData();
+  }
+
+  const sqlEscape = (val) => {
+    if (val === null || val === undefined) return 'NULL';
+    if (typeof val === 'number') return val.toString();
+    if (typeof val === 'boolean') return val ? '1' : '0';
+    return "'" + String(val).replace(/'/g, "''").replace(/\\/g, "\\\\") + "'";
+  };
+
+  let sql = `-- =====================================================================
+-- DentCare Pro - Complete SQL Database Dump
+-- Generated on: ${new Date().toISOString()}
+-- Architecture: Standard ANSI SQL (Compatible with MySQL, PostgreSQL, SQLite, MariaDB)
+--
+-- 🚀 HOW TO LOAD INTO YOUR LOCAL SQL DATABASE (ONE COMMAND):
+--
+-- 1) MySQL / MariaDB Command Line:
+--    mysql -u root -p <database_name> < ${filename}
+--    (Or inside MySQL prompt: source ${filename};)
+--
+-- 2) SQLite 3 Command Line:
+--    sqlite3 clinic_local.db < ${filename}
+--
+-- 3) PostgreSQL:
+--    psql -U postgres -d <database_name> -f ${filename}
+-- =====================================================================
+
+`;
+
+  const tableSchemas = {
+    clinic_settings: `CREATE TABLE IF NOT EXISTS clinic_settings (
+  id INT PRIMARY KEY,
+  clinic_name VARCHAR(255) NOT NULL,
+  tagline VARCHAR(255),
+  doctor_name VARCHAR(255) NOT NULL,
+  qualification VARCHAR(255),
+  registration_no VARCHAR(100),
+  phone VARCHAR(50),
+  email VARCHAR(100),
+  address TEXT,
+  currency VARCHAR(10) DEFAULT '₹',
+  tax_rate DECIMAL(5,2) DEFAULT 0,
+  invoice_footer TEXT,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);`,
+    doctors: `CREATE TABLE IF NOT EXISTS doctors (
+  id INT PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  specialty VARCHAR(255) NOT NULL,
+  qualification VARCHAR(255),
+  registration_no VARCHAR(100),
+  phone VARCHAR(50),
+  email VARCHAR(100),
+  color VARCHAR(20) DEFAULT '#0d9488',
+  consultation_fee DECIMAL(10,2) DEFAULT 500,
+  is_active INT DEFAULT 1,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);`,
+    patients: `CREATE TABLE IF NOT EXISTS patients (
+  id INT PRIMARY KEY,
+  patient_id VARCHAR(50) NOT NULL,
+  full_name VARCHAR(255) NOT NULL,
+  age INT,
+  gender VARCHAR(20),
+  phone VARCHAR(50) NOT NULL,
+  email VARCHAR(100),
+  address TEXT,
+  emergency_contact VARCHAR(255),
+  blood_group VARCHAR(10),
+  medical_history TEXT,
+  allergies TEXT,
+  notes TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);`,
+    odontogram: `CREATE TABLE IF NOT EXISTS odontogram (
+  id INT PRIMARY KEY,
+  patient_id INT NOT NULL,
+  tooth_number INT NOT NULL,
+  condition_name VARCHAR(50) NOT NULL,
+  surface VARCHAR(20) DEFAULT 'All',
+  notes TEXT,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);`,
+    procedures_catalog: `CREATE TABLE IF NOT EXISTS procedures_catalog (
+  id INT PRIMARY KEY,
+  code VARCHAR(50),
+  category VARCHAR(100) NOT NULL,
+  name VARCHAR(255) NOT NULL,
+  standard_fee DECIMAL(10,2) NOT NULL,
+  description TEXT,
+  doctor_name VARCHAR(255) DEFAULT 'All Doctors',
+  is_active INT DEFAULT 1
+);`,
+    treatments: `CREATE TABLE IF NOT EXISTS treatments (
+  id INT PRIMARY KEY,
+  patient_id INT NOT NULL,
+  procedure_id INT,
+  procedure_name VARCHAR(255) NOT NULL,
+  tooth_number VARCHAR(50),
+  doctor_name VARCHAR(255),
+  status VARCHAR(50) DEFAULT 'Planned',
+  cost DECIMAL(10,2) NOT NULL,
+  discount DECIMAL(10,2) DEFAULT 0,
+  final_amount DECIMAL(10,2) NOT NULL,
+  doctor_notes TEXT,
+  performed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  completed_at TIMESTAMP
+);`,
+    appointments: `CREATE TABLE IF NOT EXISTS appointments (
+  id INT PRIMARY KEY,
+  patient_id INT NOT NULL,
+  appointment_date VARCHAR(20) NOT NULL,
+  appointment_time VARCHAR(20) NOT NULL,
+  duration_minutes INT DEFAULT 30,
+  chair_number VARCHAR(50) DEFAULT 'Chair 1',
+  doctor_id INT,
+  doctor_name VARCHAR(255),
+  reason TEXT,
+  status VARCHAR(50) DEFAULT 'Scheduled',
+  notes TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);`,
+    invoices: `CREATE TABLE IF NOT EXISTS invoices (
+  id INT PRIMARY KEY,
+  invoice_number VARCHAR(50) NOT NULL,
+  patient_id INT NOT NULL,
+  invoice_date VARCHAR(20) NOT NULL,
+  due_date VARCHAR(20),
+  subtotal DECIMAL(10,2) NOT NULL,
+  discount_amount DECIMAL(10,2) DEFAULT 0,
+  discount_type VARCHAR(20) DEFAULT 'flat',
+  tax_amount DECIMAL(10,2) DEFAULT 0,
+  total_amount DECIMAL(10,2) NOT NULL,
+  paid_amount DECIMAL(10,2) DEFAULT 0,
+  balance_due DECIMAL(10,2) NOT NULL,
+  payment_status VARCHAR(50) DEFAULT 'Unpaid',
+  doctor_name VARCHAR(255),
+  notes TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);`,
+    invoice_items: `CREATE TABLE IF NOT EXISTS invoice_items (
+  id INT PRIMARY KEY,
+  invoice_id INT NOT NULL,
+  treatment_id INT,
+  description VARCHAR(255) NOT NULL,
+  tooth_number VARCHAR(50),
+  quantity INT DEFAULT 1,
+  unit_price DECIMAL(10,2) NOT NULL,
+  total DECIMAL(10,2) NOT NULL
+);`,
+    payments: `CREATE TABLE IF NOT EXISTS payments (
+  id INT PRIMARY KEY,
+  invoice_id INT NOT NULL,
+  patient_id INT NOT NULL,
+  payment_date VARCHAR(20) NOT NULL,
+  amount DECIMAL(10,2) NOT NULL,
+  payment_method VARCHAR(50) NOT NULL,
+  reference_no VARCHAR(100),
+  notes TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);`,
+    prescriptions: `CREATE TABLE IF NOT EXISTS prescriptions (
+  id INT PRIMARY KEY,
+  patient_id INT NOT NULL,
+  doctor_name VARCHAR(255) NOT NULL,
+  diagnosis TEXT,
+  rx_date VARCHAR(20) NOT NULL,
+  medicines TEXT NOT NULL,
+  clinical_advice TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);`,
+    medications_master: `CREATE TABLE IF NOT EXISTS medications_master (
+  id INT PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  category VARCHAR(100) NOT NULL,
+  default_dosage VARCHAR(50),
+  default_frequency VARCHAR(100),
+  default_duration VARCHAR(50),
+  instructions TEXT
+);`
+  };
+
+  for (const [table, createSql] of Object.entries(tableSchemas)) {
+    sql += `-- ---------------------------------------------------------------------\n`;
+    sql += `-- Table structure and data for \`${table}\`\n`;
+    sql += `-- ---------------------------------------------------------------------\n`;
+    sql += `${createSql}\n\n`;
+
+    const rows = Array.isArray(data[table]) ? data[table] : (data[table] ? [data[table]] : []);
+    if (rows.length > 0) {
+      for (const row of rows) {
+        const cols = Object.keys(row);
+        const vals = cols.map(c => sqlEscape(row[c]));
+        sql += `INSERT INTO ${table} (${cols.join(', ')}) VALUES (${vals.join(', ')});\n`;
+      }
+      sql += '\n';
+    }
+  }
+
+  return await saveExportFile(
+    filename,
+    sql,
+    [{ name: 'SQL Script (*.sql)', extensions: ['sql'] }],
+    'text/sql;charset=utf-8'
+  );
+}
+
+// ==========================================
+// EXCEL WORKBOOK EXPORT (.xls)
+// Multi-sheet workbook with Patients, Appointments, Billing, Treatments, Prescriptions
+// ==========================================
+export async function exportDatabaseToExcel() {
+  const dateStr = new Date().toISOString().split('T')[0];
+  const filename = `DentCare_Clinic_Excel_${dateStr}.xls`;
+
+  let patients = [];
+  let appointments = [];
+  let invoices = [];
+  let treatments = [];
+  let prescriptions = [];
+  let doctors = [];
+
+  if (isElectron) {
+    patients = await window.electronAPI.queryAll('SELECT * FROM patients ORDER BY id ASC');
+    appointments = await window.electronAPI.queryAll(`
+      SELECT a.*, p.full_name as patient_name, p.phone as patient_phone 
+      FROM appointments a 
+      LEFT JOIN patients p ON a.patient_id = p.id 
+      ORDER BY a.appointment_date DESC, a.appointment_time ASC
+    `);
+    invoices = await window.electronAPI.queryAll(`
+      SELECT i.*, p.full_name as patient_name 
+      FROM invoices i 
+      LEFT JOIN patients p ON i.patient_id = p.id 
+      ORDER BY i.id DESC
+    `);
+    treatments = await window.electronAPI.queryAll(`
+      SELECT t.*, p.full_name as patient_name 
+      FROM treatments t 
+      LEFT JOIN patients p ON t.patient_id = p.id 
+      ORDER BY t.id DESC
+    `);
+    prescriptions = await window.electronAPI.queryAll(`
+      SELECT pr.*, p.full_name as patient_name 
+      FROM prescriptions pr 
+      LEFT JOIN patients p ON pr.patient_id = p.id 
+      ORDER BY pr.id DESC
+    `);
+    doctors = await window.electronAPI.queryAll('SELECT * FROM doctors ORDER BY id ASC');
+  } else {
+    const data = webFallback.getData();
+    patients = data.patients || [];
+    doctors = data.doctors || [];
+    appointments = (data.appointments || []).map(a => {
+      const pt = patients.find(p => p.id === a.patient_id);
+      return { ...a, patient_name: pt?.full_name || 'Unknown', patient_phone: pt?.phone || '' };
+    });
+    invoices = (data.invoices || []).map(i => {
+      const pt = patients.find(p => p.id === i.patient_id);
+      return { ...i, patient_name: pt?.full_name || 'Unknown' };
+    });
+    treatments = (data.treatments || []).map(t => {
+      const pt = patients.find(p => p.id === t.patient_id);
+      return { ...t, patient_name: pt?.full_name || 'Unknown' };
+    });
+    prescriptions = (data.prescriptions || []).map(pr => {
+      const pt = patients.find(p => p.id === pr.patient_id);
+      return { ...pr, patient_name: pt?.full_name || 'Unknown' };
+    });
+  }
+
+  const xmlEscape = (val) => {
+    if (val === null || val === undefined) return '';
+    return String(val)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&apos;');
+  };
+
+  const sheets = [
+    {
+      name: 'Patients',
+      headers: ['ID', 'Patient Code', 'Full Name', 'Age', 'Gender', 'Phone', 'Email', 'Blood Group', 'Allergies', 'Medical History', 'Address'],
+      rows: patients.map(p => [
+        p.id,
+        p.patient_id,
+        p.full_name,
+        p.age || '',
+        p.gender,
+        p.phone,
+        p.email || '',
+        p.blood_group || '',
+        p.allergies || 'None',
+        typeof p.medical_history === 'string' ? p.medical_history : JSON.stringify(p.medical_history || []),
+        p.address || ''
+      ])
+    },
+    {
+      name: 'Appointments',
+      headers: ['ID', 'Date', 'Time', 'Duration (Mins)', 'Patient Name', 'Phone', 'Doctor', 'Operatory Chair', 'Status', 'Reason', 'Notes'],
+      rows: appointments.map(a => [
+        a.id,
+        a.appointment_date,
+        a.appointment_time,
+        a.duration_minutes || 30,
+        a.patient_name || '',
+        a.patient_phone || '',
+        a.doctor_name || '',
+        a.chair_number || 'Chair 1',
+        a.status || 'Scheduled',
+        a.reason || '',
+        a.notes || ''
+      ])
+    },
+    {
+      name: 'Billing & Invoices',
+      headers: ['Invoice #', 'Date', 'Patient Name', 'Doctor', 'Subtotal (₹)', 'Discount (₹)', 'Tax (₹)', 'Total Amount (₹)', 'Paid Amount (₹)', 'Balance Due (₹)', 'Status'],
+      rows: invoices.map(i => [
+        i.invoice_number,
+        i.invoice_date,
+        i.patient_name || '',
+        i.doctor_name || '',
+        Number(i.subtotal || 0),
+        Number(i.discount_amount || 0),
+        Number(i.tax_amount || 0),
+        Number(i.total_amount || 0),
+        Number(i.paid_amount || 0),
+        Number(i.balance_due || 0),
+        i.payment_status || 'Unpaid'
+      ])
+    },
+    {
+      name: 'Treatments',
+      headers: ['ID', 'Date', 'Patient Name', 'Tooth Number', 'Procedure Name', 'Doctor', 'Status', 'Cost (₹)', 'Discount (₹)', 'Final Amount (₹)', 'Doctor Notes'],
+      rows: treatments.map(t => [
+        t.id,
+        t.performed_at ? t.performed_at.split('T')[0] : '',
+        t.patient_name || '',
+        t.tooth_number || 'All',
+        t.procedure_name,
+        t.doctor_name || '',
+        t.status || 'Planned',
+        Number(t.cost || 0),
+        Number(t.discount || 0),
+        Number(t.final_amount || 0),
+        t.doctor_notes || ''
+      ])
+    },
+    {
+      name: 'Prescriptions',
+      headers: ['Rx ID', 'Date', 'Patient Name', 'Doctor', 'Diagnosis', 'Medicines', 'Clinical Advice'],
+      rows: prescriptions.map(pr => [
+        pr.id,
+        pr.rx_date,
+        pr.patient_name || '',
+        pr.doctor_name || '',
+        pr.diagnosis || '',
+        typeof pr.medicines === 'string' ? pr.medicines : JSON.stringify(pr.medicines || []),
+        pr.clinical_advice || ''
+      ])
+    },
+    {
+      name: 'Doctors',
+      headers: ['Doctor ID', 'Name', 'Specialty', 'Qualification', 'Registration No', 'Phone', 'Email', 'Consultation Fee (₹)', 'Status'],
+      rows: doctors.map(d => [
+        d.id,
+        d.name,
+        d.specialty,
+        d.qualification || '',
+        d.registration_no || '',
+        d.phone || '',
+        d.email || '',
+        Number(d.consultation_fee || 500),
+        d.is_active ? 'Active' : 'Inactive'
+      ])
+    }
+  ];
+
+  let xml = `<?xml version="1.0"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:x="urn:schemas-microsoft-com:office:excel"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:html="http://www.w3.org/TR/REC-html40">
+ <DocumentProperties xmlns="urn:schemas-microsoft-com:office:office">
+  <Author>DentCare Pro</Author>
+  <Created>${new Date().toISOString()}</Created>
+ </DocumentProperties>
+ <Styles>
+  <Style ss:ID="Default" ss:Name="Normal">
+   <Alignment ss:Vertical="Center"/>
+   <Font ss:FontName="Segoe UI" ss:Size="10" ss:Color="#1E293B"/>
+  </Style>
+  <Style ss:ID="Header">
+   <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
+   <Borders>
+    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="2" ss:Color="#0F766E"/>
+   </Borders>
+   <Font ss:FontName="Segoe UI" ss:Size="11" ss:Color="#FFFFFF" ss:Bold="1"/>
+   <Interior ss:Color="#0D9488" ss:Pattern="Solid"/>
+  </Style>
+  <Style ss:ID="NumberCell">
+   <Alignment ss:Horizontal="Right" ss:Vertical="Center"/>
+  </Style>
+ </Styles>
+`;
+
+  for (const sheet of sheets) {
+    xml += ` <Worksheet ss:Name="${xmlEscape(sheet.name)}">\n`;
+    xml += `  <Table>\n`;
+    xml += `   <Row ss:StyleID="Header" ss:Height="24">\n`;
+    for (const h of sheet.headers) {
+      xml += `    <Cell><Data ss:Type="String">${xmlEscape(h)}</Data></Cell>\n`;
+    }
+    xml += `   </Row>\n`;
+
+    for (const row of sheet.rows) {
+      xml += `   <Row ss:Height="20">\n`;
+      for (const cell of row) {
+        const isNum = typeof cell === 'number';
+        const style = isNum ? ' ss:StyleID="NumberCell"' : '';
+        const type = isNum ? 'Number' : 'String';
+        xml += `    <Cell${style}><Data ss:Type="${type}">${xmlEscape(cell)}</Data></Cell>\n`;
+      }
+      xml += `   </Row>\n`;
+    }
+
+    xml += `  </Table>\n`;
+    xml += ` </Worksheet>\n`;
+  }
+
+  xml += `</Workbook>`;
+
+  return await saveExportFile(
+    filename,
+    xml,
+    [{ name: 'Excel Workbook (*.xls)', extensions: ['xls', 'xlsx'] }],
+    'application/vnd.ms-excel;charset=utf-8'
+  );
+}
+
 export function triggerPrint() {
   if (isElectron) {
     window.electronAPI.printWindow();
@@ -1194,3 +1681,4 @@ export function triggerPrint() {
     window.print();
   }
 }
+

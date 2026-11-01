@@ -4,8 +4,6 @@ node_modules/
 .pnp.js
 
 # Production & Packaging Builds
-dist/
-dist-ssr/
 release/
 *.local
 

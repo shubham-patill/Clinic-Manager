@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   
   // Printing & Native Features
   printWindow: () => ipcRenderer.invoke('app:print'),
+  saveFile: (options) => ipcRenderer.invoke('app:saveFile', options),
   
   // App Info
   isElectron: true,

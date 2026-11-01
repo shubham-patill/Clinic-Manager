@@ -156,6 +156,25 @@ app.whenReady().then(() => {
     }
   });
 
+  ipcMain.handle('app:saveFile', async (event, { defaultFilename, content, filters }) => {
+    try {
+      const result = await dialog.showSaveDialog(mainWindow, {
+        title: 'Save Export File',
+        defaultPath: defaultFilename,
+        filters: filters || [{ name: 'All Files', extensions: ['*'] }]
+      });
+
+      if (!result.canceled && result.filePath) {
+        fs.writeFileSync(result.filePath, content, 'utf8');
+        return { success: true, path: result.filePath };
+      }
+      return { success: false, canceled: true };
+    } catch (err) {
+      console.error('Save file error:', err);
+      return { success: false, error: err.message };
+    }
+  });
+
   createWindow();
 
   app.on('activate', () => {

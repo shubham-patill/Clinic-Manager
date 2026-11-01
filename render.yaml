@@ -3,5 +3,5 @@ services:
     name: clinic-manager
     env: node
     plan: free
-    buildCommand: npm run build
+    buildCommand: npm install && npm run build
     startCommand: node server.js
