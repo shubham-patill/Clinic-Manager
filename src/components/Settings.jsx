@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Settings as SettingsIcon, 
   Database, 
@@ -8,36 +8,40 @@ import {
   CheckCircle2, 
   ShieldCheck, 
   Folder, 
-  Info,
-  Building,
-  AlertTriangle,
-  UserPlus,
-  Trash2,
-  Edit,
-  UserCheck,
-  Stethoscope,
-  FileSpreadsheet,
-  FileCode,
-  Terminal,
-  Copy,
-  Check
+  Info, 
+  Building, 
+  AlertTriangle, 
+  UserPlus, 
+  Trash2, 
+  Edit, 
+  UserCheck, 
+  Stethoscope, 
+  FileSpreadsheet, 
+  FileCode, 
+  Terminal, 
+  Copy, 
+  Check,
+  UploadCloud,
+  FolderInput,
+  RefreshCw
 } from 'lucide-react';
 import { 
   getClinicSettings, 
   updateClinicSettings, 
   getDatabaseInfo, 
   backupDatabase, 
-  restoreDatabase,
-  exportDatabaseToSQL,
-  exportDatabaseToExcel
+  restoreDatabase, 
+  exportDatabaseToSQL, 
+  exportDatabaseToExcel 
 } from '../services/api';
 
 export default function Settings({ 
   clinicSettings, 
-  doctors = [],
-  onSettingsUpdated,
-  onSaveDoctor,
-  onDeleteDoctor
+  doctors = [], 
+  onSettingsUpdated, 
+  onSaveDoctor, 
+  onDeleteDoctor,
+  onRefreshData
 }) {
   const [formData, setFormData] = useState({
     clinic_name: '',
@@ -113,21 +117,76 @@ export default function Settings({
     }
   };
 
-  const handleRestore = async () => {
-    if (!confirm('CAUTION: Restoring a backup will overwrite the current database with the backup file. Proceed?')) {
+  const fileInputRef = useRef(null);
+  const [isImporting, setIsImporting] = useState(false);
+
+  const handleImportDatabase = async () => {
+    // In Browser / Web mode: trigger file input dialog
+    if (!window.electronAPI) {
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+        fileInputRef.current.click();
+      }
       return;
     }
+
+    // In Electron Desktop
+    if (!confirm('CAUTION: Importing a database will replace or update current clinic records (Patients, Appointments, Treatments, Prescriptions, and Billing). Do you want to proceed?')) {
+      return;
+    }
+
     try {
+      setIsImporting(true);
       const res = await restoreDatabase();
       if (res && res.success) {
-        setRestoreSuccess('Database successfully restored! Please restart the software if needed.');
+        const sourceName = res.filename || res.path || 'selected file';
+        setRestoreSuccess(`Database successfully imported from "${sourceName}"! All clinic records refreshed.`);
+        if (onRefreshData) onRefreshData();
         getDatabaseInfo().then(info => setDbInfo(info));
-        setTimeout(() => setRestoreSuccess(null), 5000);
+        getClinicSettings().then(s => {
+          if (s && onSettingsUpdated) onSettingsUpdated(s);
+        });
+        setTimeout(() => setRestoreSuccess(null), 8000);
+      } else if (res && !res.canceled && res.error) {
+        alert('Import failed: ' + res.error);
       }
     } catch (err) {
-      alert('Restore failed: ' + err.message);
+      alert('Import failed: ' + err.message);
+    } finally {
+      setIsImporting(false);
     }
   };
+
+  const handleWebFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!confirm(`Import database from "${file.name}"? This will replace or update your clinic records with the data in this backup.`)) {
+      return;
+    }
+
+    try {
+      setIsImporting(true);
+      const res = await restoreDatabase(file);
+      if (res && res.success) {
+        setRestoreSuccess(`Database successfully imported from "${file.name}"! All clinic records refreshed.`);
+        if (onRefreshData) onRefreshData();
+        getDatabaseInfo().then(info => setDbInfo(info));
+        getClinicSettings().then(s => {
+          if (s && onSettingsUpdated) onSettingsUpdated(s);
+        });
+        setTimeout(() => setRestoreSuccess(null), 8000);
+      } else if (res && res.error) {
+        alert('Import failed: ' + res.error);
+      }
+    } catch (err) {
+      alert('Import failed: ' + err.message);
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  const handleRestore = handleImportDatabase;
 
   // State for SQL & Excel exports
   const [sqlSuccess, setSqlSuccess] = useState(null);
@@ -247,7 +306,7 @@ export default function Settings({
           <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={handleExportExcel}
-              disabled={isExporting}
+              disabled={isExporting || isImporting}
               className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-700/30 transition disabled:opacity-50"
               title="Export all Patients, Appointments, Billing, and Treatments to an Excel spreadsheet"
             >
@@ -255,7 +314,7 @@ export default function Settings({
             </button>
             <button
               onClick={handleExportSQL}
-              disabled={isExporting}
+              disabled={isExporting || isImporting}
               className="flex items-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-700/30 transition disabled:opacity-50"
               title="Export full ANSI SQL script with CREATE TABLE & INSERT statements for 1-command loading"
             >
@@ -263,22 +322,39 @@ export default function Settings({
             </button>
             <button
               onClick={handleBackup}
-              disabled={isExporting}
+              disabled={isExporting || isImporting}
               className="flex items-center gap-1.5 px-3.5 py-2 bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-xs font-bold shadow-md shadow-teal-700/30 transition disabled:opacity-50"
               title="Export raw SQLite database file"
             >
               <HardDriveDownload className="w-4 h-4" /> Backup (.db)
             </button>
             <button
-              onClick={handleRestore}
-              disabled={isExporting}
-              className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-bold border border-slate-600 transition disabled:opacity-50"
-              title="Restore database from a .db backup"
+              onClick={handleImportDatabase}
+              disabled={isExporting || isImporting}
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold shadow-md shadow-amber-700/30 transition disabled:opacity-50"
+              title="Import or restore database from .db, .sql, or .json file"
             >
-              <HardDriveUpload className="w-4 h-4" /> Restore (.db)
+              {isImporting ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin" /> Importing DB...
+                </>
+              ) : (
+                <>
+                  <UploadCloud className="w-4 h-4" /> Import Old DB
+                </>
+              )}
             </button>
           </div>
         </div>
+
+        {/* Hidden File Input for Web Browser Mode */}
+        <input
+          type="file"
+          ref={fileInputRef}
+          onChange={handleWebFileChange}
+          accept=".db,.sqlite,.sqlite3,.sql,.json"
+          className="hidden"
+        />
 
         {/* Feedback pills */}
         {excelSuccess && (
@@ -303,11 +379,52 @@ export default function Settings({
         )}
 
         {restoreSuccess && (
-          <div className="p-3 bg-teal-900/60 border border-teal-500 text-teal-200 text-xs rounded-xl flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-teal-400 shrink-0" />
+          <div className="p-3 bg-amber-900/60 border border-amber-500 text-amber-200 text-xs rounded-xl flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-amber-400 shrink-0" />
             <span>{restoreSuccess}</span>
           </div>
         )}
+
+        {/* Import Database Interactive Action Card */}
+        <div className="bg-slate-950/70 rounded-2xl p-4 border border-amber-500/30 space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 border border-amber-500/30 mt-0.5">
+                <UploadCloud className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="text-xs font-bold text-white flex items-center gap-2">
+                  Import / Restore Old Clinic Database
+                  <span className="text-[10px] font-semibold text-amber-300 bg-amber-950 px-2 py-0.5 rounded-full border border-amber-800">
+                    Supports .db, .sql, .json
+                  </span>
+                </h4>
+                <p className="text-[11px] text-slate-300 mt-1 max-w-xl leading-relaxed">
+                  Have an old database or exported file? You can import previous <strong>SQLite databases (.db)</strong>, <strong>SQL dump scripts (.sql)</strong>, or <strong>JSON backups (.json)</strong>. All patients, appointments, treatments, invoices, and prescriptions will be updated automatically.
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleImportDatabase}
+              disabled={isImporting}
+              className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-white rounded-xl text-xs font-bold shadow-md shadow-amber-900/40 transition disabled:opacity-50 shrink-0"
+            >
+              {isImporting ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  <span>Processing Database...</span>
+                </>
+              ) : (
+                <>
+                  <FolderInput className="w-4 h-4" />
+                  <span>Select & Import Old Database</span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
 
         {/* 1-Command SQL Load Guide Box */}
         <div className="bg-slate-950/80 rounded-2xl p-4 border border-slate-700/80 space-y-2.5">

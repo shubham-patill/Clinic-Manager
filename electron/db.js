@@ -554,10 +554,116 @@ function backupDatabase(destPath) {
   return true;
 }
 
+function executeSqlContent(sqlContent) {
+  const knownTables = [
+    'invoice_items', 'payments', 'invoices', 'treatments', 'odontogram',
+    'appointments', 'prescriptions', 'patients', 'procedures_catalog',
+    'doctors', 'medications_master', 'clinic_settings'
+  ];
+
+  db.exec('PRAGMA foreign_keys = OFF;');
+  try {
+    const upperSql = sqlContent.toUpperCase();
+    if (!upperSql.includes('DROP TABLE')) {
+      for (const tbl of knownTables) {
+        if (upperSql.includes(`INSERT INTO ${tbl.toUpperCase()}`)) {
+          try {
+            db.exec(`DELETE FROM ${tbl};`);
+          } catch (e) {
+            // Ignore if table doesn't exist
+          }
+        }
+      }
+    }
+    db.exec(sqlContent);
+    db.exec('PRAGMA wal_checkpoint(TRUNCATE);');
+  } finally {
+    db.exec('PRAGMA foreign_keys = ON;');
+  }
+  return true;
+}
+
+function importSqlDump(sourcePath) {
+  if (!fs.existsSync(sourcePath)) {
+    throw new Error('Selected SQL file not found: ' + sourcePath);
+  }
+  const sqlContent = fs.readFileSync(sourcePath, 'utf8');
+  return executeSqlContent(sqlContent);
+}
+
+function importJsonDump(sourcePathOrData) {
+  let data;
+  if (typeof sourcePathOrData === 'string' && fs.existsSync(sourcePathOrData)) {
+    data = JSON.parse(fs.readFileSync(sourcePathOrData, 'utf8'));
+  } else if (typeof sourcePathOrData === 'object') {
+    data = sourcePathOrData;
+  } else {
+    data = JSON.parse(sourcePathOrData);
+  }
+
+  db.exec('PRAGMA foreign_keys = OFF;');
+  try {
+    if (data.clinic_settings) {
+      db.exec('DELETE FROM clinic_settings;');
+      const s = data.clinic_settings;
+      const stmt = db.prepare(`
+        INSERT INTO clinic_settings (id, clinic_name, tagline, doctor_name, qualification, registration_no, phone, email, address, currency, tax_rate, invoice_footer)
+        VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      stmt.run(
+        s.clinic_name || 'SmileCraft Dental',
+        s.tagline || '',
+        s.doctor_name || 'Dr. Specialist',
+        s.qualification || '',
+        s.registration_no || '',
+        s.phone || '',
+        s.email || '',
+        s.address || '',
+        s.currency || '₹',
+        s.tax_rate || 0,
+        s.invoice_footer || ''
+      );
+    }
+
+    const simpleTables = [
+      'doctors', 'patients', 'odontogram', 'procedures_catalog',
+      'treatments', 'appointments', 'invoices', 'invoice_items',
+      'payments', 'prescriptions', 'medications_master'
+    ];
+
+    for (const tbl of simpleTables) {
+      if (Array.isArray(data[tbl])) {
+        db.exec(`DELETE FROM ${tbl};`);
+        for (const row of data[tbl]) {
+          const keys = Object.keys(row);
+          if (keys.length === 0) continue;
+          const placeholders = keys.map(() => '?').join(', ');
+          const stmt = db.prepare(`INSERT OR REPLACE INTO ${tbl} (${keys.join(', ')}) VALUES (${placeholders})`);
+          stmt.run(...keys.map(k => (row[k] === undefined ? null : row[k])));
+        }
+      }
+    }
+    db.exec('PRAGMA wal_checkpoint(TRUNCATE);');
+  } finally {
+    db.exec('PRAGMA foreign_keys = ON;');
+  }
+  return true;
+}
+
 function restoreDatabase(sourcePath, app) {
   if (!fs.existsSync(sourcePath)) {
-    throw new Error('Selected backup file not found.');
+    throw new Error('Selected backup file not found: ' + sourcePath);
   }
+
+  const ext = path.extname(sourcePath).toLowerCase();
+  if (ext === '.sql') {
+    return importSqlDump(sourcePath);
+  }
+  if (ext === '.json') {
+    return importJsonDump(sourcePath);
+  }
+
+  // SQLite Binary file (.db, .sqlite, .sqlite3)
   // Close current db connection
   db.close();
   // Overwrite database file
@@ -576,5 +682,7 @@ module.exports = {
   execute,
   getDbFilePath,
   backupDatabase,
-  restoreDatabase
+  restoreDatabase,
+  executeSqlContent,
+  importJsonDump
 };

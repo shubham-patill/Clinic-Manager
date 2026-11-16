@@ -9,7 +9,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Database Management
   getDbInfo: () => ipcRenderer.invoke('db:getInfo'),
   backupDatabase: () => ipcRenderer.invoke('db:backup'),
-  restoreDatabase: () => ipcRenderer.invoke('db:restore'),
+  restoreDatabase: (sourcePath) => ipcRenderer.invoke('db:restore', sourcePath),
+  importContent: (options) => ipcRenderer.invoke('db:importContent', options),
   
   // Printing & Native Features
   printWindow: () => ipcRenderer.invoke('app:print'),

@@ -6,9 +6,10 @@ import {
   Database, 
   Calendar as CalendarIcon,
   HardDriveDownload,
+  UploadCloud,
   CheckCircle2
 } from 'lucide-react';
-import { backupDatabase } from '../services/api';
+import { backupDatabase, restoreDatabase } from '../services/api';
 
 export default function Header({ 
   title, 
@@ -19,6 +20,8 @@ export default function Header({
   onRefresh
 }) {
   const [backupStatus, setBackupStatus] = React.useState(null);
+  const [importStatus, setImportStatus] = React.useState(null);
+  const fileInputRef = React.useRef(null);
 
   const handleQuickBackup = async () => {
     try {
@@ -29,6 +32,42 @@ export default function Header({
       }
     } catch (err) {
       alert('Backup failed: ' + err.message);
+    }
+  };
+
+  const handleQuickImport = async () => {
+    if (!window.electronAPI) {
+      fileInputRef.current?.click();
+      return;
+    }
+    if (!confirm('CAUTION: Importing a database will replace or update current clinic records with the chosen file. Proceed?')) {
+      return;
+    }
+    try {
+      const res = await restoreDatabase();
+      if (res && res.success) {
+        setImportStatus('DB Imported!');
+        if (onRefresh) onRefresh();
+        setTimeout(() => setImportStatus(null), 3000);
+      }
+    } catch (err) {
+      alert('Import failed: ' + err.message);
+    }
+  };
+
+  const handleFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!confirm(`Import database from "${file.name}"? This will replace or update your clinic records.`)) return;
+    try {
+      const res = await restoreDatabase(file);
+      if (res && res.success) {
+        setImportStatus('DB Imported!');
+        if (onRefresh) onRefresh();
+        setTimeout(() => setImportStatus(null), 3000);
+      }
+    } catch (err) {
+      alert('Import failed: ' + err.message);
     }
   };
 
@@ -46,7 +85,15 @@ export default function Header({
         {subtitle && <p className="text-xs text-slate-500 mt-0.5">{subtitle}</p>}
       </div>
 
-      <div className="flex items-center gap-3">
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileChange}
+        accept=".db,.sqlite,.sqlite3,.sql,.json"
+        className="hidden"
+      />
+
+      <div className="flex items-center gap-2.5">
         {/* Date Display */}
         <div className="hidden md:flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 rounded-lg text-xs font-medium text-slate-600">
           <CalendarIcon className="w-3.5 h-3.5 text-teal-600" />
@@ -68,6 +115,25 @@ export default function Header({
             <>
               <HardDriveDownload className="w-3.5 h-3.5 text-teal-600" />
               <span>Backup DB</span>
+            </>
+          )}
+        </button>
+
+        {/* Quick DB Import Button */}
+        <button
+          onClick={handleQuickImport}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-amber-300 text-amber-800 bg-amber-50 hover:bg-amber-100 transition shadow-sm"
+          title="Import old database file (.db, .sql, .json)"
+        >
+          {importStatus ? (
+            <>
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+              <span className="text-emerald-700 font-bold">{importStatus}</span>
+            </>
+          ) : (
+            <>
+              <UploadCloud className="w-3.5 h-3.5 text-amber-600" />
+              <span>Import DB</span>
             </>
           )}
         </button>

@@ -130,22 +130,47 @@ app.whenReady().then(() => {
     }
   });
 
-  ipcMain.handle('db:restore', async () => {
+  ipcMain.handle('db:restore', async (event, passedPath) => {
     try {
-      const result = await dialog.showOpenDialog(mainWindow, {
-        title: 'Select Backup Database to Restore',
-        filters: [{ name: 'SQLite Database', extensions: ['db', 'sqlite'] }],
-        properties: ['openFile']
-      });
+      let sourcePath = passedPath;
+      if (!sourcePath) {
+        const result = await dialog.showOpenDialog(mainWindow, {
+          title: 'Select Database to Import / Restore',
+          filters: [
+            { name: 'All Supported Database Files (*.db, *.sql, *.json)', extensions: ['db', 'sqlite', 'sqlite3', 'sql', 'json'] },
+            { name: 'SQLite Database (*.db, *.sqlite)', extensions: ['db', 'sqlite', 'sqlite3'] },
+            { name: 'SQL Script Dump (*.sql)', extensions: ['sql'] },
+            { name: 'JSON Backup (*.json)', extensions: ['json'] }
+          ],
+          properties: ['openFile']
+        });
 
-      if (!result.canceled && result.filePaths && result.filePaths.length > 0) {
-        const sourcePath = result.filePaths[0];
-        dbLayer.restoreDatabase(sourcePath, app);
-        return { success: true, path: sourcePath };
+        if (result.canceled || !result.filePaths || result.filePaths.length === 0) {
+          return { success: false, canceled: true };
+        }
+        sourcePath = result.filePaths[0];
       }
-      return { success: false, canceled: true };
+
+      dbLayer.restoreDatabase(sourcePath, app);
+      const ext = path.extname(sourcePath).toLowerCase();
+      const filename = path.basename(sourcePath);
+      return { success: true, path: sourcePath, filename, ext };
     } catch (err) {
       console.error('Restore error:', err);
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('db:importContent', async (event, { type, content }) => {
+    try {
+      if (type === 'sql') {
+        dbLayer.executeSqlContent(content);
+      } else if (type === 'json') {
+        dbLayer.importJsonDump(content);
+      }
+      return { success: true };
+    } catch (err) {
+      console.error('Import content error:', err);
       return { success: false, error: err.message };
     }
   });

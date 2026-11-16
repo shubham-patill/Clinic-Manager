@@ -1179,12 +1179,114 @@ export async function backupDatabase() {
   return { success: true, path: a.download };
 }
 
-export async function restoreDatabase() {
+export async function restoreDatabase(fileObjOrPath = null) {
   if (isElectron) {
+    if (fileObjOrPath && typeof fileObjOrPath === 'string') {
+      return await window.electronAPI.restoreDatabase(fileObjOrPath);
+    }
     return await window.electronAPI.restoreDatabase();
   }
-  alert('In browser mode, please use Electron desktop executable for direct .db binary restore.');
-  return { success: false };
+
+  // Web / Browser fallback import
+  if (!fileObjOrPath) {
+    throw new Error('Please select a database file (.sql or .json) to import.');
+  }
+
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    const fileName = fileObjOrPath.name || 'imported_database';
+    const ext = fileName.split('.').pop().toLowerCase();
+
+    reader.onload = async (e) => {
+      try {
+        const content = e.target.result;
+        if (ext === 'json') {
+          const parsed = JSON.parse(content);
+          webFallback.setData(parsed);
+          resolve({ success: true, filename: fileName, ext, mode: 'JSON Web Restore' });
+        } else if (ext === 'sql') {
+          parseSqlDumpToWebFallback(content);
+          resolve({ success: true, filename: fileName, ext, mode: 'SQL Web Restore' });
+        } else if (ext === 'db' || ext === 'sqlite' || ext === 'sqlite3') {
+          alert('Note: Binary .db SQLite files run natively in the Windows Desktop application. For web view, please upload an exported .sql or .json backup.');
+          resolve({ success: false, error: 'Binary .db files run in the Windows Desktop application. Use .sql or .json on web.' });
+        } else {
+          resolve({ success: false, error: 'Unsupported file format. Please upload .db, .sql, or .json.' });
+        }
+      } catch (err) {
+        reject(err);
+      }
+    };
+    reader.onerror = () => reject(new Error('Failed to read database file'));
+    reader.readAsText(fileObjOrPath);
+  });
+}
+
+function parseSqlDumpToWebFallback(sqlText) {
+  const data = webFallback.getData();
+  const insertRegex = /INSERT(?:\s+OR\s+REPLACE)?\s+INTO\s+(\w+)\s*\(([^)]+)\)\s*VALUES\s*\((.+)\);/gi;
+  let match;
+  const newTables = {};
+
+  function parseSqlVal(v) {
+    v = v.trim();
+    if (v === 'NULL' || v === 'null') return null;
+    if (v === 'TRUE' || v === 'true') return 1;
+    if (v === 'FALSE' || v === 'false') return 0;
+    if (!isNaN(v) && v !== '') return Number(v);
+    if ((v.startsWith("'") && v.endsWith("'")) || (v.startsWith('"') && v.endsWith('"'))) {
+      return v.slice(1, -1).replace(/''/g, "'").replace(/\\'/g, "'").replace(/\\\\/g, "\\");
+    }
+    return v;
+  }
+
+  while ((match = insertRegex.exec(sqlText)) !== null) {
+    const table = match[1].toLowerCase();
+    const cols = match[2].split(',').map(c => c.trim().replace(/[`"']/g, ''));
+    const rawVals = match[3];
+    const vals = [];
+    let cur = '';
+    let inQuote = false;
+    let quoteChar = '';
+
+    for (let i = 0; i < rawVals.length; i++) {
+      const ch = rawVals[i];
+      if (!inQuote && (ch === "'" || ch === '"')) {
+        inQuote = true;
+        quoteChar = ch;
+      } else if (inQuote && ch === quoteChar) {
+        if (rawVals[i + 1] === quoteChar) {
+          cur += quoteChar;
+          i++; // skip escaped quote
+        } else {
+          inQuote = false;
+        }
+      } else if (!inQuote && ch === ',') {
+        vals.push(parseSqlVal(cur));
+        cur = '';
+      } else {
+        cur += ch;
+      }
+    }
+    vals.push(parseSqlVal(cur));
+
+    if (!newTables[table]) newTables[table] = [];
+    const row = {};
+    cols.forEach((col, idx) => {
+      row[col] = vals[idx];
+    });
+    newTables[table].push(row);
+  }
+
+  for (const [table, rows] of Object.entries(newTables)) {
+    if (table === 'clinic_settings' && rows.length > 0) {
+      data.clinic_settings = rows[0];
+    } else {
+      data[table] = rows;
+    }
+  }
+  webFallback.setData(data);
+  return data;
 }
 
 // Helper to download or save export files in Electron or Browser
@@ -1416,6 +1518,7 @@ export async function exportDatabaseToSQL() {
     sql += `-- ---------------------------------------------------------------------\n`;
     sql += `-- Table structure and data for \`${table}\`\n`;
     sql += `-- ---------------------------------------------------------------------\n`;
+    sql += `DROP TABLE IF EXISTS ${table};\n`;
     sql += `${createSql}\n\n`;
 
     const rows = Array.isArray(data[table]) ? data[table] : (data[table] ? [data[table]] : []);
@@ -1423,7 +1526,7 @@ export async function exportDatabaseToSQL() {
       for (const row of rows) {
         const cols = Object.keys(row);
         const vals = cols.map(c => sqlEscape(row[c]));
-        sql += `INSERT INTO ${table} (${cols.join(', ')}) VALUES (${vals.join(', ')});\n`;
+        sql += `INSERT OR REPLACE INTO ${table} (${cols.join(', ')}) VALUES (${vals.join(', ')});\n`;
       }
       sql += '\n';
     }

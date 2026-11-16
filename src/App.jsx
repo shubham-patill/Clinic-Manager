@@ -367,6 +367,7 @@ export default function App() {
               onSettingsUpdated={(newSettings) => setClinicSettings(newSettings)}
               onSaveDoctor={handleSaveDoctor}
               onDeleteDoctor={handleDeleteDoctor}
+              onRefreshData={refreshAllData}
             />
           )}
         </main>
