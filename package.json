@@ -48,10 +48,12 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "DentCare Pro"
+      "shortcutName": "DentCare Pro",
+      "artifactName": "DentCare-Pro-Setup-v${version}.${ext}",
+      "differentialPackage": false
     },
     "portable": {
-      "artifactName": "DentCare-Pro-Portable.exe"
+      "artifactName": "DentCare-Pro-Portable-v${version}.${ext}"
     }
   },
   "keywords": [
