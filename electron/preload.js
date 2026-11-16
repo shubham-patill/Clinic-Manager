@@ -19,4 +19,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // App Info
   isElectron: true,
   platform: process.platform,
+  version: require('../package.json').version,
 });

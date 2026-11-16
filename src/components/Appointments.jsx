@@ -54,7 +54,7 @@ export default function Appointments({
 
   // Form State
   const [formData, setFormData] = useState({
-    patient_id: preselectedPatient ? preselectedPatient.id : '',
+    patient_id: preselectedPatient ? preselectedPatient.id : (patients[0]?.id || ''),
     appointment_date: todayStr,
     appointment_time: '10:00',
     duration_minutes: 30,
@@ -64,6 +64,18 @@ export default function Appointments({
     status: 'Scheduled',
     notes: ''
   });
+
+  React.useEffect(() => {
+    if (isBookModalOpen) {
+      setClashError(null);
+      if (preselectedPatient) {
+        setFormData(prev => ({
+          ...prev,
+          patient_id: preselectedPatient.id
+        }));
+      }
+    }
+  }, [isBookModalOpen, preselectedPatient]);
 
   const openBookModal = (pt = null) => {
     setClashError(null);

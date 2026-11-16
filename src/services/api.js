@@ -1777,11 +1777,21 @@ export async function exportDatabaseToExcel() {
   );
 }
 
-export function triggerPrint() {
-  if (isElectron) {
-    window.electronAPI.printWindow();
-  } else {
+export async function triggerPrint() {
+  if (isElectron && window.electronAPI && window.electronAPI.printWindow) {
+    try {
+      return await window.electronAPI.printWindow();
+    } catch (err) {
+      console.error('Electron print error:', err);
+      return { success: false, error: err.message };
+    }
+  }
+  try {
     window.print();
+    return { success: true };
+  } catch (err) {
+    console.error('Browser print error:', err);
+    return { success: false, error: err.message };
   }
 }
 

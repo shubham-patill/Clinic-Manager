@@ -13,6 +13,9 @@ import {
 } from 'lucide-react';
 
 export default function Sidebar({ activeTab, setActiveTab, clinicSettings }) {
+  const appVersion = (typeof window !== 'undefined' && window.electronAPI?.version) || 
+    (typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '1.0.0');
+
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'patients', label: 'Patients (EHR)', icon: Users },
@@ -37,9 +40,14 @@ export default function Sidebar({ activeTab, setActiveTab, clinicSettings }) {
             <h1 className="font-bold text-white text-base leading-tight tracking-tight truncate">
               {clinicSettings?.clinic_name || 'DentCare Pro'}
             </h1>
-            <p className="text-xs text-teal-400 flex items-center gap-1 font-medium mt-0.5">
-              <Sparkles className="w-3 h-3" /> Dental Clinical OS
-            </p>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <span className="text-xs text-teal-400 flex items-center gap-1 font-medium">
+                <Sparkles className="w-3 h-3" /> Dental Clinical OS
+              </span>
+              <span className="text-[10px] bg-teal-950 text-teal-300 font-mono font-bold px-1.5 py-0.5 rounded border border-teal-800">
+                v{appVersion}
+              </span>
+            </div>
           </div>
         </div>
       </div>
@@ -98,6 +106,12 @@ export default function Sidebar({ activeTab, setActiveTab, clinicSettings }) {
             {clinicSettings?.registration_no || 'DENT-REG-84920'}
           </p>
         </div>
+      </div>
+
+      {/* App Version & Release Pill */}
+      <div className="px-4 py-2 bg-slate-950/90 border-t border-slate-800/80 flex items-center justify-between text-[10px] text-slate-500 font-mono">
+        <span>DentCare Pro Build</span>
+        <span className="text-teal-400 font-bold">v{appVersion}</span>
       </div>
     </aside>
   );

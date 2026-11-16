@@ -57,6 +57,13 @@ export default function App() {
   // Global modals
   const [isAddPatientModalOpen, setIsAddPatientModalOpen] = useState(false);
   const [isBookApptModalOpen, setIsBookApptModalOpen] = useState(false);
+  const [selectedPatientForAppt, setSelectedPatientForAppt] = useState(null);
+
+  const handleOpenBookAppointment = (patient = null) => {
+    setSelectedPatientForAppt(patient);
+    setActiveTab('appointments');
+    setIsBookApptModalOpen(true);
+  };
 
   // Load all foundational data
   const refreshAllData = async () => {
@@ -185,7 +192,7 @@ export default function App() {
 
   // Navigation shortcuts from profile
   const handleProfileBookAppt = (patient) => {
-    setIsBookApptModalOpen(true);
+    handleOpenBookAppointment(patient);
   };
 
   const handleProfileNewInvoice = (patient) => {
@@ -259,7 +266,7 @@ export default function App() {
             setIsAddPatientModalOpen(true);
             if (activeTab !== 'patients') setActiveTab('patients');
           }}
-          onNewAppointment={() => setIsBookApptModalOpen(true)}
+          onNewAppointment={() => handleOpenBookAppointment(null)}
           onRefresh={refreshAllData}
         />
 
@@ -277,7 +284,7 @@ export default function App() {
                 setIsAddPatientModalOpen(true);
                 setActiveTab('patients');
               }}
-              onNewAppointment={() => setIsBookApptModalOpen(true)}
+              onNewAppointment={() => handleOpenBookAppointment(null)}
             />
           )}
 
@@ -317,7 +324,11 @@ export default function App() {
               onDeleteAppointment={handleDeleteAppointment}
               onSelectPatient={handleSelectPatient}
               isBookModalOpen={isBookApptModalOpen}
-              setIsBookModalOpen={setIsBookApptModalOpen}
+              setIsBookModalOpen={(open) => {
+                setIsBookApptModalOpen(open);
+                if (!open) setSelectedPatientForAppt(null);
+              }}
+              preselectedPatient={selectedPatientForAppt}
             />
           )}
 

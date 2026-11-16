@@ -21,12 +21,13 @@ const dbLayer = require('./db');
 let mainWindow = null;
 
 function createWindow() {
+  const appVersion = app.getVersion ? app.getVersion() : require('../package.json').version;
   mainWindow = new BrowserWindow({
     width: 1366,
     height: 840,
     minWidth: 1024,
     minHeight: 700,
-    title: 'DentCare Pro - Dental Clinic Management System',
+    title: `DentCare Pro v${appVersion} - Dental Clinic Management System`,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
@@ -176,8 +177,37 @@ app.whenReady().then(() => {
   });
 
   ipcMain.handle('app:print', async () => {
-    if (mainWindow) {
-      mainWindow.webContents.print({ silent: false, printBackground: true });
+    if (!mainWindow) return { success: false, error: 'No active window' };
+    try {
+      const printers = typeof mainWindow.webContents.getPrintersAsync === 'function'
+        ? await mainWindow.webContents.getPrintersAsync()
+        : (mainWindow.webContents.getPrinters ? mainWindow.webContents.getPrinters() : []);
+
+      if (!printers || printers.length === 0) {
+        return {
+          success: false,
+          noPrinter: true,
+          error: 'Printer Not Found: No printer is currently connected or detected on this computer. Please connect a physical printer, or select Microsoft Print to PDF.'
+        };
+      }
+
+      return new Promise((resolve) => {
+        mainWindow.webContents.print({ silent: false, printBackground: true }, (success, failureReason) => {
+          if (!success) {
+            const isCancelled = failureReason && failureReason.toLowerCase().includes('cancel');
+            resolve({
+              success: false,
+              cancelled: isCancelled,
+              error: isCancelled ? null : (failureReason || 'Printing failed or printer unavailable')
+            });
+          } else {
+            resolve({ success: true });
+          }
+        });
+      });
+    } catch (err) {
+      console.error('Print handler error:', err);
+      return { success: false, error: err.message };
     }
   });
 

@@ -43,6 +43,9 @@ export default function Settings({
   onDeleteDoctor,
   onRefreshData
 }) {
+  const appVersion = (typeof window !== 'undefined' && window.electronAPI?.version) || 
+    (typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '1.0.0');
+
   const [formData, setFormData] = useState({
     clinic_name: '',
     tagline: '',
@@ -272,223 +275,21 @@ export default function Settings({
 
   return (
     <div className="p-8 space-y-8 max-w-5xl mx-auto">
-      {/* Page Title */}
-      <div>
-        <h2 className="text-2xl font-extrabold text-slate-800 tracking-tight flex items-center gap-2">
-          <SettingsIcon className="w-6 h-6 text-teal-600" /> Clinic Settings & Multi-Doctor Team
-        </h2>
-        <p className="text-xs text-slate-500 mt-1">
-          Manage clinic branding, multiple doctors, default currency (₹), and embedded SQLite backups.
-        </p>
-      </div>
-
-      {/* Embedded Database Status Card */}
-      <div className="bg-gradient-to-r from-slate-900 to-slate-800 text-white p-6 rounded-3xl shadow-lg border border-slate-700/60 space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      {/* Page Title & App Version Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-teal-500/20 text-teal-400 flex items-center justify-center border border-teal-500/30">
-              <Database className="w-6 h-6" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-base font-bold text-white">Self-Contained Embedded Database Engine</h3>
-                <span className="flex items-center gap-1 text-[11px] font-bold text-emerald-400 bg-emerald-950/80 px-2 py-0.5 rounded-full border border-emerald-800">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                  Active & Healthy
-                </span>
-              </div>
-              <p className="text-xs text-slate-300 mt-0.5">
-                SQLite 3 engine is embedded directly inside this application. No MySQL, PostgreSQL, or SQL Server installation required.
-              </p>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              onClick={handleExportExcel}
-              disabled={isExporting || isImporting}
-              className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-700/30 transition disabled:opacity-50"
-              title="Export all Patients, Appointments, Billing, and Treatments to an Excel spreadsheet"
-            >
-              <FileSpreadsheet className="w-4 h-4" /> Export to Excel (.xls)
-            </button>
-            <button
-              onClick={handleExportSQL}
-              disabled={isExporting || isImporting}
-              className="flex items-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-700/30 transition disabled:opacity-50"
-              title="Export full ANSI SQL script with CREATE TABLE & INSERT statements for 1-command loading"
-            >
-              <FileCode className="w-4 h-4" /> Export SQL Dump (.sql)
-            </button>
-            <button
-              onClick={handleBackup}
-              disabled={isExporting || isImporting}
-              className="flex items-center gap-1.5 px-3.5 py-2 bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-xs font-bold shadow-md shadow-teal-700/30 transition disabled:opacity-50"
-              title="Export raw SQLite database file"
-            >
-              <HardDriveDownload className="w-4 h-4" /> Backup (.db)
-            </button>
-            <button
-              onClick={handleImportDatabase}
-              disabled={isExporting || isImporting}
-              className="flex items-center gap-1.5 px-3.5 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold shadow-md shadow-amber-700/30 transition disabled:opacity-50"
-              title="Import or restore database from .db, .sql, or .json file"
-            >
-              {isImporting ? (
-                <>
-                  <RefreshCw className="w-4 h-4 animate-spin" /> Importing DB...
-                </>
-              ) : (
-                <>
-                  <UploadCloud className="w-4 h-4" /> Import Old DB
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-
-        {/* Hidden File Input for Web Browser Mode */}
-        <input
-          type="file"
-          ref={fileInputRef}
-          onChange={handleWebFileChange}
-          accept=".db,.sqlite,.sqlite3,.sql,.json"
-          className="hidden"
-        />
-
-        {/* Feedback pills */}
-        {excelSuccess && (
-          <div className="p-3 bg-emerald-900/60 border border-emerald-500 text-emerald-200 text-xs rounded-xl flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-            <span>Excel exported successfully! Open in Microsoft Excel: <strong>{excelSuccess}</strong></span>
-          </div>
-        )}
-
-        {sqlSuccess && (
-          <div className="p-3 bg-indigo-900/60 border border-indigo-500 text-indigo-200 text-xs rounded-xl flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-indigo-400 shrink-0" />
-            <span>SQL dump exported successfully! File: <strong>{sqlSuccess}</strong></span>
-          </div>
-        )}
-
-        {backupSuccess && (
-          <div className="p-3 bg-teal-900/60 border border-teal-500 text-teal-200 text-xs rounded-xl flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-teal-400 shrink-0" />
-            <span>Database backup (.db) created: {backupSuccess}</span>
-          </div>
-        )}
-
-        {restoreSuccess && (
-          <div className="p-3 bg-amber-900/60 border border-amber-500 text-amber-200 text-xs rounded-xl flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-amber-400 shrink-0" />
-            <span>{restoreSuccess}</span>
-          </div>
-        )}
-
-        {/* Import Database Interactive Action Card */}
-        <div className="bg-slate-950/70 rounded-2xl p-4 border border-amber-500/30 space-y-3">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 border border-amber-500/30 mt-0.5">
-                <UploadCloud className="w-5 h-5" />
-              </div>
-              <div>
-                <h4 className="text-xs font-bold text-white flex items-center gap-2">
-                  Import / Restore Old Clinic Database
-                  <span className="text-[10px] font-semibold text-amber-300 bg-amber-950 px-2 py-0.5 rounded-full border border-amber-800">
-                    Supports .db, .sql, .json
-                  </span>
-                </h4>
-                <p className="text-[11px] text-slate-300 mt-1 max-w-xl leading-relaxed">
-                  Have an old database or exported file? You can import previous <strong>SQLite databases (.db)</strong>, <strong>SQL dump scripts (.sql)</strong>, or <strong>JSON backups (.json)</strong>. All patients, appointments, treatments, invoices, and prescriptions will be updated automatically.
-                </p>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={handleImportDatabase}
-              disabled={isImporting}
-              className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-white rounded-xl text-xs font-bold shadow-md shadow-amber-900/40 transition disabled:opacity-50 shrink-0"
-            >
-              {isImporting ? (
-                <>
-                  <RefreshCw className="w-4 h-4 animate-spin" />
-                  <span>Processing Database...</span>
-                </>
-              ) : (
-                <>
-                  <FolderInput className="w-4 h-4" />
-                  <span>Select & Import Old Database</span>
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-
-        {/* 1-Command SQL Load Guide Box */}
-        <div className="bg-slate-950/80 rounded-2xl p-4 border border-slate-700/80 space-y-2.5">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-xs font-semibold text-slate-200">
-              <Terminal className="w-4 h-4 text-indigo-400" />
-              <span>One-Command SQL Database Import Guide</span>
-            </div>
-            <span className="text-[10px] text-slate-400 bg-slate-800 px-2 py-0.5 rounded-md font-mono">
-              ANSI SQL Compatible
+            <h2 className="text-2xl font-extrabold text-slate-800 tracking-tight flex items-center gap-2">
+              <SettingsIcon className="w-6 h-6 text-teal-600" /> Clinic Settings & Multi-Doctor Team
+            </h2>
+            <span className="text-xs font-mono font-bold bg-teal-100 text-teal-800 px-2.5 py-0.5 rounded-full border border-teal-200">
+              v{appVersion}
             </span>
           </div>
-          <p className="text-[11px] text-slate-400 leading-relaxed">
-            The exported <strong>.sql</strong> file contains all <code className="text-teal-300">CREATE TABLE</code> schemas and <code className="text-teal-300">INSERT INTO</code> records. You can load it into any local SQL server (MySQL, MariaDB, SQLite, or PostgreSQL) with just <strong>one command</strong>:
+          <p className="text-xs text-slate-500 mt-1">
+            Manage multi-doctor team, clinic profile, currency (₹), and embedded SQLite database backups.
           </p>
-
-          <div className="space-y-1.5 font-mono text-[11px]">
-            <div className="flex items-center justify-between bg-slate-900 px-3 py-2 rounded-lg border border-slate-800 text-slate-300">
-              <span><span className="text-indigo-400 font-bold">MySQL / MariaDB:</span> mysql -u root -p clinic_db &lt; DentCare_Clinic_Dump.sql</span>
-              <button
-                type="button"
-                onClick={() => handleCopyCommand('mysql -u root -p clinic_db < DentCare_Clinic_Dump.sql')}
-                className="text-xs text-slate-400 hover:text-white flex items-center gap-1 transition ml-2"
-                title="Copy command"
-              >
-                {copiedCommand ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-              </button>
-            </div>
-            <div className="flex items-center justify-between bg-slate-900 px-3 py-2 rounded-lg border border-slate-800 text-slate-300">
-              <span><span className="text-teal-400 font-bold">SQLite 3:</span> sqlite3 clinic_local.db &lt; DentCare_Clinic_Dump.sql</span>
-              <button
-                type="button"
-                onClick={() => handleCopyCommand('sqlite3 clinic_local.db < DentCare_Clinic_Dump.sql')}
-                className="text-xs text-slate-400 hover:text-white flex items-center gap-1 transition ml-2"
-                title="Copy command"
-              >
-                {copiedCommand ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-              </button>
-            </div>
-          </div>
         </div>
-
-        {/* DB Details grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-3 border-t border-slate-700/60 text-xs">
-          <div className="bg-slate-950/50 p-3 rounded-xl border border-slate-800">
-            <span className="text-slate-400 block text-[11px]">Database Architecture</span>
-            <span className="font-bold text-slate-200">SQLite3 (WAL Mode + Foreign Keys)</span>
-          </div>
-          <div className="bg-slate-950/50 p-3 rounded-xl border border-slate-800">
-            <span className="text-slate-400 block text-[11px]">Database File Size</span>
-            <span className="font-bold text-teal-400">{dbInfo?.sizeReadable || 'Calculating...'}</span>
-          </div>
-          <div className="bg-slate-950/50 p-3 rounded-xl border border-slate-800">
-            <span className="text-slate-400 block text-[11px]">Portability Mode</span>
-            <span className="font-bold text-slate-200">Zero-Config Standalone</span>
-          </div>
-        </div>
-
-        {dbInfo?.path && (
-          <div className="text-[11px] text-slate-400 font-mono bg-slate-950/70 p-2.5 rounded-lg border border-slate-800 flex items-center gap-2">
-            <Folder className="w-3.5 h-3.5 text-teal-400 shrink-0" />
-            <span className="truncate">File on disk: {dbInfo.path}</span>
-          </div>
-        )}
       </div>
 
       {/* Multi-Doctor Management Section */}
@@ -497,7 +298,7 @@ export default function Settings({
           <div>
             <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
               <UserCheck className="w-5 h-5 text-teal-600" />
-              Multi-Doctor Team & Specialists
+              Multi-Doctor Team & Specialists (Primary)
             </h3>
             <p className="text-xs text-slate-500 mt-0.5">
               Add multiple dentists and specialists. Each doctor can be booked without schedule clashes.
@@ -707,6 +508,219 @@ export default function Settings({
             </button>
           </div>
         </form>
+      </div>
+
+      {/* Embedded Database Status Card */}
+      <div className="bg-gradient-to-r from-slate-900 to-slate-800 text-white p-6 rounded-3xl shadow-lg border border-slate-700/60 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-2xl bg-teal-500/20 text-teal-400 flex items-center justify-center border border-teal-500/30">
+              <Database className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-bold text-white">Self-Contained Embedded Database Engine</h3>
+                <span className="flex items-center gap-1 text-[11px] font-bold text-emerald-400 bg-emerald-950/80 px-2 py-0.5 rounded-full border border-emerald-800">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                  Active & Healthy
+                </span>
+              </div>
+              <p className="text-xs text-slate-300 mt-0.5">
+                SQLite 3 engine is embedded directly inside this application. No MySQL, PostgreSQL, or SQL Server installation required.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={handleExportExcel}
+              disabled={isExporting || isImporting}
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-700/30 transition disabled:opacity-50"
+              title="Export all Patients, Appointments, Billing, and Treatments to an Excel spreadsheet"
+            >
+              <FileSpreadsheet className="w-4 h-4" /> Export to Excel (.xls)
+            </button>
+            <button
+              onClick={handleExportSQL}
+              disabled={isExporting || isImporting}
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-700/30 transition disabled:opacity-50"
+              title="Export full ANSI SQL script with CREATE TABLE & INSERT statements for 1-command loading"
+            >
+              <FileCode className="w-4 h-4" /> Export SQL Dump (.sql)
+            </button>
+            <button
+              onClick={handleBackup}
+              disabled={isExporting || isImporting}
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-xs font-bold shadow-md shadow-teal-700/30 transition disabled:opacity-50"
+              title="Export raw SQLite database file"
+            >
+              <HardDriveDownload className="w-4 h-4" /> Backup (.db)
+            </button>
+            <button
+              onClick={handleImportDatabase}
+              disabled={isExporting || isImporting}
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold shadow-md shadow-amber-700/30 transition disabled:opacity-50"
+              title="Import or restore database from .db, .sql, or .json file"
+            >
+              {isImporting ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin" /> Importing DB...
+                </>
+              ) : (
+                <>
+                  <UploadCloud className="w-4 h-4" /> Import Old DB
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {/* Hidden File Input for Web Browser Mode */}
+        <input
+          type="file"
+          ref={fileInputRef}
+          onChange={handleWebFileChange}
+          accept=".db,.sqlite,.sqlite3,.sql,.json"
+          className="hidden"
+        />
+
+        {/* Feedback pills */}
+        {excelSuccess && (
+          <div className="p-3 bg-emerald-900/60 border border-emerald-500 text-emerald-200 text-xs rounded-xl flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span>Excel exported successfully! Open in Microsoft Excel: <strong>{excelSuccess}</strong></span>
+          </div>
+        )}
+
+        {sqlSuccess && (
+          <div className="p-3 bg-indigo-900/60 border border-indigo-500 text-indigo-200 text-xs rounded-xl flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-indigo-400 shrink-0" />
+            <span>SQL dump exported successfully! File: <strong>{sqlSuccess}</strong></span>
+          </div>
+        )}
+
+        {backupSuccess && (
+          <div className="p-3 bg-teal-900/60 border border-teal-500 text-teal-200 text-xs rounded-xl flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-teal-400 shrink-0" />
+            <span>Database backup (.db) created: {backupSuccess}</span>
+          </div>
+        )}
+
+        {restoreSuccess && (
+          <div className="p-3 bg-amber-900/60 border border-amber-500 text-amber-200 text-xs rounded-xl flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-amber-400 shrink-0" />
+            <span>{restoreSuccess}</span>
+          </div>
+        )}
+
+        {/* Import Database Interactive Action Card */}
+        <div className="bg-slate-950/70 rounded-2xl p-4 border border-amber-500/30 space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 border border-amber-500/30 mt-0.5">
+                <UploadCloud className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="text-xs font-bold text-white flex items-center gap-2">
+                  Import / Restore Old Clinic Database
+                  <span className="text-[10px] font-semibold text-amber-300 bg-amber-950 px-2 py-0.5 rounded-full border border-amber-800">
+                    Supports .db, .sql, .json
+                  </span>
+                </h4>
+                <p className="text-[11px] text-slate-300 mt-1 max-w-xl leading-relaxed">
+                  Have an old database or exported file? You can import previous <strong>SQLite databases (.db)</strong>, <strong>SQL dump scripts (.sql)</strong>, or <strong>JSON backups (.json)</strong>. All patients, appointments, treatments, invoices, and prescriptions will be updated automatically.
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleImportDatabase}
+              disabled={isImporting}
+              className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-white rounded-xl text-xs font-bold shadow-md shadow-amber-900/40 transition disabled:opacity-50 shrink-0"
+            >
+              {isImporting ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  <span>Processing Database...</span>
+                </>
+              ) : (
+                <>
+                  <FolderInput className="w-4 h-4" />
+                  <span>Select & Import Old Database</span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {/* 1-Command SQL Load Guide Box */}
+        <div className="bg-slate-950/80 rounded-2xl p-4 border border-slate-700/80 space-y-2.5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-xs font-semibold text-slate-200">
+              <Terminal className="w-4 h-4 text-indigo-400" />
+              <span>One-Command SQL Database Import Guide</span>
+            </div>
+            <span className="text-[10px] text-slate-400 bg-slate-800 px-2 py-0.5 rounded-md font-mono">
+              ANSI SQL Compatible
+            </span>
+          </div>
+          <p className="text-[11px] text-slate-400 leading-relaxed">
+            The exported <strong>.sql</strong> file contains all <code className="text-teal-300">CREATE TABLE</code> schemas and <code className="text-teal-300">INSERT INTO</code> records. You can load it into any local SQL server (MySQL, MariaDB, SQLite, or PostgreSQL) with just <strong>one command</strong>:
+          </p>
+
+          <div className="space-y-1.5 font-mono text-[11px]">
+            <div className="flex items-center justify-between bg-slate-900 px-3 py-2 rounded-lg border border-slate-800 text-slate-300">
+              <span><span className="text-indigo-400 font-bold">MySQL / MariaDB:</span> mysql -u root -p clinic_db &lt; DentCare_Clinic_Dump.sql</span>
+              <button
+                type="button"
+                onClick={() => handleCopyCommand('mysql -u root -p clinic_db < DentCare_Clinic_Dump.sql')}
+                className="text-xs text-slate-400 hover:text-white flex items-center gap-1 transition ml-2"
+                title="Copy command"
+              >
+                {copiedCommand ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+              </button>
+            </div>
+            <div className="flex items-center justify-between bg-slate-900 px-3 py-2 rounded-lg border border-slate-800 text-slate-300">
+              <span><span className="text-teal-400 font-bold">SQLite 3:</span> sqlite3 clinic_local.db &lt; DentCare_Clinic_Dump.sql</span>
+              <button
+                type="button"
+                onClick={() => handleCopyCommand('sqlite3 clinic_local.db < DentCare_Clinic_Dump.sql')}
+                className="text-xs text-slate-400 hover:text-white flex items-center gap-1 transition ml-2"
+                title="Copy command"
+              >
+                {copiedCommand ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* DB Details grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 pt-3 border-t border-slate-700/60 text-xs">
+          <div className="bg-slate-950/50 p-3 rounded-xl border border-slate-800">
+            <span className="text-slate-400 block text-[11px]">Database Architecture</span>
+            <span className="font-bold text-slate-200">SQLite3 (WAL Mode + Foreign Keys)</span>
+          </div>
+          <div className="bg-slate-950/50 p-3 rounded-xl border border-slate-800">
+            <span className="text-slate-400 block text-[11px]">Database File Size</span>
+            <span className="font-bold text-teal-400">{dbInfo?.sizeReadable || 'Calculating...'}</span>
+          </div>
+          <div className="bg-slate-950/50 p-3 rounded-xl border border-slate-800">
+            <span className="text-slate-400 block text-[11px]">Portability Mode</span>
+            <span className="font-bold text-slate-200">Zero-Config Standalone</span>
+          </div>
+          <div className="bg-slate-950/50 p-3 rounded-xl border border-slate-800">
+            <span className="text-slate-400 block text-[11px]">Desktop App Version</span>
+            <span className="font-bold text-emerald-400 font-mono">v{appVersion} (Latest)</span>
+          </div>
+        </div>
+
+        {dbInfo?.path && (
+          <div className="text-[11px] text-slate-400 font-mono bg-slate-950/70 p-2.5 rounded-lg border border-slate-800 flex items-center gap-2">
+            <Folder className="w-3.5 h-3.5 text-teal-400 shrink-0" />
+            <span className="truncate">File on disk: {dbInfo.path}</span>
+          </div>
+        )}
       </div>
 
       {/* Doctor Add / Edit Modal */}
